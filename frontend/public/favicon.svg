@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1DB954;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="20" fill="url(#grad)"/>
+  <g transform="translate(50,50)">
+    <!-- Headphones icon -->
+    <path d="M-20,-5 C-20,-20 -10,-30 0,-30 C10,-30 20,-20 20,-5" 
+          stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <rect x="-25" y="-10" width="12" height="20" rx="4" fill="white"/>
+    <rect x="13" y="-10" width="12" height="20" rx="4" fill="white"/>
+    <!-- Sound waves -->
+    <path d="M-35,0 Q-40,0 -40,-5 Q-40,-10 -35,-10" 
+          stroke="white" stroke-width="2" fill="none" opacity="0.7"/>
+    <path d="M35,0 Q40,0 40,-5 Q40,-10 35,-10" 
+          stroke="white" stroke-width="2" fill="none" opacity="0.7"/>
+  </g>
+</svg>
