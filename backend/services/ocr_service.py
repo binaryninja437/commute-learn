@@ -89,35 +89,26 @@ class OCRService:
             return f"OCR Exception: {e}"
 
     async def _extract_from_pdf(self, pdf_path: str) -> str:
+        """Extract text from PDF using pypdf"""
         try:
-            import fitz
-            doc = fitz.open(pdf_path)
+            from pypdf import PdfReader
+
+            reader = PdfReader(pdf_path)
             text = ""
-            for page in doc:
-                text += page.get_text() + "\n"
-            doc.close()
+
+            for i, page in enumerate(reader.pages):
+                page_text = page.extract_text()
+                if page_text:
+                    text += f"--- Page {i+1} ---\n{page_text}\n\n"
+
+            print(f"[OCR] PDF extracted: {len(text)} characters")
 
             if len(text.strip()) > 50:
-                print(f"[OCR] PDF text extracted: {len(text)} chars")
                 return text
 
-            # If no text, OCR first page as image
-            doc = fitz.open(pdf_path)
-            page = doc[0]
-            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-            img_bytes = pix.tobytes("png")
-            doc.close()
+            # If no text extracted, PDF might be scanned - return message
+            return "PDF appears to be scanned/image-based. Please upload as image (JPG/PNG) for OCR."
 
-            # Save temp image and OCR it
-            temp_path = pdf_path + "_temp.png"
-            with open(temp_path, "wb") as f:
-                f.write(img_bytes)
-
-            result = await self._extract_from_image(temp_path)
-            os.remove(temp_path)
-            return result
-
-        except ImportError:
-            return "PyMuPDF not installed. Cannot process PDF."
         except Exception as e:
-            return f"PDF Error: {e}"
+            print(f"[OCR] PDF error: {e}")
+            return f"PDF extraction failed: {e}"
