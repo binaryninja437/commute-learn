@@ -4,7 +4,7 @@ python-multipart==0.0.6
 httpx==0.25.0
 pypdf==3.17.4
 pydub==0.25.1
-gTTS==2.5.0
+gTTS==2.4.0
 pydantic==1.10.13
 python-dotenv==1.0.0
 aiofiles==23.2.1
