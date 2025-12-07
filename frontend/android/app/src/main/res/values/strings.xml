@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Commute Learn</string>
+    <string name="title_activity_main">Commute Learn</string>
+    <string name="package_name">com.commutelearn.app</string>
+    <string name="custom_url_scheme">com.commutelearn.app</string>
+</resources>
