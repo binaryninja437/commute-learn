@@ -18,3 +18,21 @@ dist/
 .DS_Store
 Thumbs.db
 *.log
+
+# Android/Keystore (SECURITY - NEVER COMMIT!)
+*.jks
+*.keystore
+keystore.properties
+*passwords*.txt
+key.properties
+
+# Android Build
+frontend/android/build/
+frontend/android/app/build/
+frontend/android/.gradle/
+frontend/android/local.properties
+
+# Release APKs/AABs (too large for git)
+*.aab
+*-release.apk
+CommuteLearn-*.apk
