@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 // API Configuration
-const API_BASE = 'https://commute-learn-backend.onrender.com/api';
+const API_BASE = 'https://commute-learn-api.onrender.com/api';
 
 // ============================================
 // MAIN APP COMPONENT
@@ -764,7 +764,7 @@ function PlayerBar({
     <div className="fixed bottom-0 left-0 right-0 bg-spotify-dark/95 backdrop-blur-xl border-t border-white/5 px-4 py-3 z-50">
       <audio
         ref={audioRef}
-        src={podcast.audio_url || `https://commute-learn-backend.onrender.com/audio/${podcast.audio_file}`}
+        src={podcast.audio_url || `https://commute-learn-api.onrender.com/audio/${podcast.audio_file}`}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={() => {}}
@@ -839,7 +839,7 @@ function PlayerBar({
             className="w-20 hidden md:block"
           />
           <a
-            href={`https://commute-learn-backend.onrender.com/api/download/${podcast.job_id}`}
+            href={`https://commute-learn-api.onrender.com/api/download/${podcast.job_id}`}
             download
             className="text-text-secondary hover:text-white"
             title="Download MP3"
