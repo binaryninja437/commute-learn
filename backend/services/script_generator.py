@@ -1,202 +1,155 @@
 """
-Script Generator Service
-Converts extracted text into engaging Hinglish podcast script
-with two AI tutors: Didi (female) and Bhaiya (male)
+Script Generator Service with Retry Logic
+Handles Gemini API overload (503 errors)
 """
+
+import os
+import httpx
+import asyncio
+import random
 
 from dotenv import load_dotenv
 load_dotenv()
 
-import os
-import httpx
-import json
-from typing import Optional
-
 
 class ScriptGenerator:
-    """
-    Generates engaging podcast scripts in Hinglish
-    Format: Two tutors (Didi & Bhaiya) discussing concepts
-    """
-    
     def __init__(self):
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
-        self.gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-        
-    async def generate_podcast_script(
-        self,
-        text: str,
-        subject: str = "General",
-        chapter: str = "Notes",
-        duration_minutes: int = 10
-    ) -> str:
-        """
-        Generate a Hinglish podcast script from extracted text
-        """
-        if not self.gemini_api_key:
+        self.api_key = os.getenv("GEMINI_API_KEY", "")
+        self.api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+
+        if self.api_key:
+            print(f"[SCRIPT] API key loaded: {self.api_key[:15]}...")
+        else:
+            print("[SCRIPT] WARNING: No API key found!")
+
+    async def generate_script(self, extracted_text: str, subject: str = "General", chapter: str = "Notes") -> str:
+        """Generate Hinglish podcast script with retry logic"""
+        print(f"[SCRIPT] Generating script for {subject} - {chapter}")
+        print(f"[SCRIPT] Input text length: {len(extracted_text)} chars")
+
+        if not self.api_key:
             return self._get_demo_script(subject, chapter)
-        
-        try:
-            prompt = self._create_prompt(text, subject, chapter, duration_minutes)
-            
-            payload = {
-                "contents": [{
-                    "parts": [{"text": prompt}]
-                }],
-                "generationConfig": {
-                    "temperature": 0.8,  # More creative
-                    "maxOutputTokens": 8192,
-                    "topP": 0.95
-                }
+
+        prompt = self._create_prompt(extracted_text, subject, chapter)
+
+        # Retry up to 3 times with exponential backoff
+        max_retries = 3
+
+        for attempt in range(max_retries):
+            try:
+                script = await self._call_api(prompt, attempt)
+                if script:
+                    print(f"[SCRIPT] SUCCESS! Generated {len(script)} chars")
+                    return script
+
+            except Exception as e:
+                print(f"[SCRIPT] Attempt {attempt + 1} failed: {e}")
+
+                if attempt < max_retries - 1:
+                    # Exponential backoff: 2s, 4s, 8s
+                    wait_time = (2 ** attempt) + random.uniform(0, 1)
+                    print(f"[SCRIPT] Waiting {wait_time:.1f}s before retry...")
+                    await asyncio.sleep(wait_time)
+
+        # All retries failed - return demo script
+        print("[SCRIPT] All retries failed, using demo script")
+        return self._get_demo_script(subject, chapter)
+
+    async def _call_api(self, prompt: str, attempt: int = 0) -> str:
+        """Make API call to Gemini"""
+
+        payload = {
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }],
+            "generationConfig": {
+                "temperature": 0.8,
+                "maxOutputTokens": 8192
             }
-            
-            async with httpx.AsyncClient(timeout=90.0) as client:
-                response = await client.post(
-                    f"{self.gemini_url}?key={self.gemini_api_key}",
-                    json=payload
-                )
-                
-                if response.status_code != 200:
-                    import sys
-                    sys.stderr.write(f"Script generation error: {response.status_code} - {response.text}\n")
-                    sys.stderr.flush()
-                    return self._get_demo_script(subject, chapter)
-                
-                result = response.json()
-                
-                if "candidates" in result and len(result["candidates"]) > 0:
-                    content = result["candidates"][0].get("content", {})
-                    parts = content.get("parts", [])
-                    if parts:
-                        script = parts[0].get("text", "")
-                        return self._clean_script(script)
-                
-                return self._get_demo_script(subject, chapter)
-                
-        except Exception as e:
-            import sys
-            sys.stderr.write(f"Script generation exception: {e}\n")
-            sys.stderr.flush()
-            return self._get_demo_script(subject, chapter)
-    
-    def _create_prompt(
-        self,
-        text: str,
-        subject: str,
-        chapter: str,
-        duration_minutes: int
-    ) -> str:
-        """Create the prompt for script generation"""
-        
-        # Truncate text if too long (to fit in context)
-        max_chars = 15000
-        if len(text) > max_chars:
-            text = text[:max_chars] + "\n[... content truncated for length ...]"
-        
-        return f"""You are a script writer for "Commute & Learn" - India's #1 audio study app for JEE/NEET students.
+        }
 
-Create an engaging {duration_minutes}-minute podcast script in HINGLISH (mix of Hindi and English) with TWO tutors:
+        url = f"{self.api_url}?key={self.api_key}"
 
-**DIDI (Female tutor):**
-- Friendly, encouraging, patient
-- Explains "why" behind concepts
-- Uses real-life analogies Indian students relate to
-- Says things like "Dekho beta...", "Samjhe?", "Bilkul simple hai!"
+        # Increase timeout for retries
+        timeout = 60 + (attempt * 30)
 
-**BHAIYA (Male tutor):**
-- Energetic, exam-focused, practical
-- Gives shortcuts, tricks, JEE/NEET tips
-- Uses examples like cricket, movies, food
-- Says things like "Arre yaar...", "Pakka yaad rakhna!", "Exam mein aayega!"
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(url, json=payload)
 
-**SUBJECT:** {subject}
-**CHAPTER:** {chapter}
+            print(f"[SCRIPT] API Response Status: {response.status_code}")
 
-**SOURCE CONTENT:**
-{text}
+            # Handle 503 - Model Overloaded
+            if response.status_code == 503:
+                error_data = response.json() if response.text else {}
+                print(f"[SCRIPT] Model overloaded (503): {error_data}")
+                raise Exception("Model overloaded - will retry")
 
-**SCRIPT REQUIREMENTS:**
-1. Start with a catchy intro (Didi welcomes, Bhaiya hypes up the topic)
-2. Break down concepts in simple Hinglish
-3. Include exam tips and common mistakes
-4. Add memory tricks (mnemonics) where possible
-5. End with quick revision points
-6. Keep it conversational, fun, NOT boring lecture
+            # Handle other errors
+            if response.status_code != 200:
+                print(f"[SCRIPT] API Error: {response.text[:300]}")
+                raise Exception(f"API error {response.status_code}")
 
-**FORMAT YOUR OUTPUT EXACTLY LIKE THIS:**
+            result = response.json()
+
+            if "candidates" in result and len(result["candidates"]) > 0:
+                content = result["candidates"][0].get("content", {})
+                parts = content.get("parts", [])
+                if parts:
+                    return parts[0].get("text", "")
+
+            raise Exception("No content in response")
+
+    def _create_prompt(self, text: str, subject: str, chapter: str) -> str:
+        """Create the podcast script generation prompt"""
+
+        return f"""You are a scriptwriter for an educational podcast called "SaarLM" targeted at Indian JEE/NEET students.
+
+Create an engaging Hinglish (Hindi + English mix) podcast script based on the following study notes.
+
+CHARACTERS:
+- DIDI: A warm, encouraging female tutor who explains concepts clearly
+- BHAIYA: An energetic male tutor who adds exam tips and memory tricks
+
+RULES:
+1. Write in Hinglish (mix Hindi and English naturally, like Indian students speak)
+2. Start with a warm greeting from DIDI
+3. Alternate between DIDI and BHAIYA
+4. DIDI explains the main concepts
+5. BHAIYA adds shortcuts, mnemonics, and exam tips
+6. Include "Toh yaad rakhna!" moments for key points
+7. End with a motivational closing
+8. Keep it conversational and fun, not boring!
+9. Use relatable examples from daily Indian life
+
+SUBJECT: {subject}
+CHAPTER: {chapter}
+
+STUDY NOTES:
+{text[:4000]}
+
+FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
 DIDI: [dialogue]
 BHAIYA: [dialogue]
 DIDI: [dialogue]
 ...
 
-**IMPORTANT:**
-- Use Hinglish naturally (not forced)
-- Keep sentences short (for TTS clarity)
-- Include pauses with "..." 
-- Make it sound like two friends teaching, not robots
-- Target 8-12 minutes of speaking time
+Generate an engaging 5-7 minute podcast script now:"""
 
-Generate the complete script now:"""
-
-    def _clean_script(self, script: str) -> str:
-        """Clean and format the generated script"""
-        # Remove any markdown formatting
-        script = script.replace("**", "")
-        script = script.replace("```", "")
-        
-        # Ensure proper speaker labels
-        lines = script.split("\n")
-        cleaned_lines = []
-        
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            
-            # Normalize speaker labels
-            if line.upper().startswith("DIDI:"):
-                line = "DIDI:" + line[5:]
-            elif line.upper().startswith("BHAIYA:"):
-                line = "BHAIYA:" + line[7:]
-            
-            cleaned_lines.append(line)
-        
-        return "\n".join(cleaned_lines)
-    
     def _get_demo_script(self, subject: str, chapter: str) -> str:
-        """Return a demo script for testing"""
-        return f"""DIDI: Hello students! Swagat hai aapka Commute and Learn mein! Aaj hum padhenge {subject} ka ek bahut important chapter... {chapter}!
+        """Fallback demo script when API fails"""
 
-BHAIYA: Arre waaah! Yeh toh mera favorite topic hai! Dekho guys, yeh chapter JEE aur NEET dono mein aata hai... almost har saal!
+        return f"""DIDI: Hello hello, mere pyaare students! Main hoon aapki Didi, aur aaj hum {subject} ke ek important topic pe baat karenge!
 
-DIDI: Bilkul sahi Bhaiya! Toh chalo, ek ek concept ko simple tarike se samajhte hain... Pehle basics clear karte hain.
+BHAIYA: Aur main hoon Bhaiya! Aaj ka topic hai {chapter}. Didi, shuru karein?
 
-BHAIYA: Haan haan! Dekho yaar, isko samajhne ke liye ek example lete hain... Cricket ki tarah socho!
+DIDI: Haan Bhaiya! Toh dekho beta, yeh topic bahut important hai exam ke liye. Basic concepts se shuru karte hain.
 
-DIDI: Achha idea hai! Toh socho... jab Virat Kohli batting karta hai, toh wo ball ko force lagata hai, right? Isse hi hum physics mein force kehte hain.
+BHAIYA: Ek important tip yaad rakhna - jab bhi yeh topic aaye, pehle fundamentals clear karo!
 
-BHAIYA: Exactly! Aur jo formula yaad rakhna hai wo hai F equals m into a... Force equals mass into acceleration... Pakka yaad rakhna!
+DIDI: Bilkul sahi Bhaiya! Toh students, is topic mein humne key points cover kiye. Practice karte raho!
 
-DIDI: Ab dekho beta, yeh formula kitna powerful hai... Agar mass badh jaaye, same force pe acceleration kam ho jayega...
+BHAIYA: Aur haan, revision mat bhoolna! Daily 15 minutes is topic ko do.
 
-BHAIYA: Arre haan! Isliye heavy truck slow start hota hai aur bike jaldi pick up karti hai... Same engine power, different mass!
+DIDI: Sahi baat hai! Toh aaj ke liye itna hi. Keep studying, keep shining!
 
-DIDI: Waah Bhaiya! Kya example diya! Ab students ko samajh aa gaya hoga...
-
-BHAIYA: Aur ek important tip for exam... Jab bhi force wala question aaye, pehle Free Body Diagram banao... Time bachega aur galti nahi hogi!
-
-DIDI: Haan yeh bahut zaroori hai! FBD se sab forces clearly dikh jaate hain... confuse nahi hoge!
-
-BHAIYA: Chalo ab kuch quick revision points... Number one: Newton ka first law... objects apni state change nahi karte jab tak force na lage!
-
-DIDI: Number two: F equals ma... force mass aur acceleration se related hai!
-
-BHAIYA: Number three: Action reaction... har force ka equal aur opposite reaction hota hai!
-
-DIDI: Perfect! Toh students, aaj ka podcast yahin khatam hota hai... Hope you enjoyed learning with us!
-
-BHAIYA: Haan guys! Kal phir milte hain next topic ke saath... Tab tak practice karo aur notes revise karo!
-
-DIDI: Bye bye! Happy studying!
-
-BHAIYA: All the best! Crack karo JEE aur NEET! Ciao!"""
+BHAIYA: All the best for your exams! Jai Hind!"""

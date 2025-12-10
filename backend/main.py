@@ -175,8 +175,8 @@ async def process_file(job_id: str):
         })
         
         # Stage 2: Generate Hinglish Script
-        script = await script_generator.generate_podcast_script(
-            text=extracted_text,
+        script = await script_generator.generate_script(
+            extracted_text=extracted_text,
             subject=job["subject"],
             chapter=job["chapter"]
         )
