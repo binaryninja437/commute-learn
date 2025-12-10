@@ -72,7 +72,11 @@ class OCRService:
                     json=payload
                 )
 
-            print(f"[OCR] Response: {response.status_code}")
+            print(f"[OCR] API Response Status: {response.status_code}")
+
+            if response.status_code != 200:
+                print(f"[OCR] API Error Response: {response.text[:500]}")
+                return f"API Error: {response.status_code} - {response.text[:200]}"
 
             if response.status_code == 200:
                 result = response.json()
@@ -80,9 +84,6 @@ class OCRService:
                 print(f"[OCR] SUCCESS! Got {len(text)} characters")
                 # Don't print preview - may contain special chars that Windows console can't handle
                 return text
-            else:
-                print(f"[OCR] API Error: {response.text[:300]}")
-                return f"API Error: {response.status_code}"
 
         except Exception as e:
             print(f"[OCR] Exception: {e}")
@@ -103,7 +104,7 @@ class OCRService:
 
             print(f"[OCR] PDF extracted: {len(text)} characters")
 
-            if len(text.strip()) > 30:
+            if len(text.strip()) > 10:
                 return text
 
             # If no text extracted, PDF might be scanned - return message

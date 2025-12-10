@@ -161,7 +161,10 @@ async def process_file(job_id: str):
         
         extracted_text = await ocr_service.extract_text(file_path)
 
-        if not extracted_text or len(extracted_text.strip()) < 30:
+        print(f"[DEBUG] Extracted text length: {len(extracted_text) if extracted_text else 0}")
+        print(f"[DEBUG] Extracted text preview: {extracted_text[:200] if extracted_text else 'NONE'}...")
+
+        if not extracted_text or len(extracted_text.strip()) < 10:
             raise Exception("Could not extract enough text from the file. Please ensure the image/PDF contains readable text.")
         
         job_status[job_id].update({
