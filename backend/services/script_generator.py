@@ -1,12 +1,13 @@
 """
 Script Generator Service with Retry Logic
-Handles Gemini API overload (503 errors)
+Handles Gemini API overload (503 errors) with Groq backup
 """
 
 import os
 import httpx
 import asyncio
 import random
+from groq import Groq
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -16,11 +17,15 @@ class ScriptGenerator:
     def __init__(self):
         self.api_key = os.getenv("GEMINI_API_KEY", "")
         self.api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        self.groq_key = os.getenv("GROQ_API_KEY", "")
 
         if self.api_key:
             print(f"[SCRIPT] API key loaded: {self.api_key[:15]}...")
         else:
             print("[SCRIPT] WARNING: No API key found!")
+
+        if self.groq_key:
+            print(f"[SCRIPT] Groq backup key loaded")
 
     async def generate_script(self, extracted_text: str, subject: str = "General", chapter: str = "Notes") -> str:
         """Generate Hinglish podcast script with retry logic"""
@@ -51,8 +56,13 @@ class ScriptGenerator:
                     print(f"[SCRIPT] Waiting {wait_time:.1f}s before retry...")
                     await asyncio.sleep(wait_time)
 
-        # All retries failed - return demo script
-        print("[SCRIPT] All retries failed, using demo script")
+        # Try Groq backup before demo script
+        groq_script = await self._call_groq_backup(prompt)
+        if groq_script:
+            return groq_script
+
+        # All APIs failed - return demo script
+        print("[SCRIPT] All APIs failed, using demo script")
         return self._get_demo_script(subject, chapter)
 
     async def _call_api(self, prompt: str, attempt: int = 0) -> str:
@@ -98,6 +108,31 @@ class ScriptGenerator:
                     return parts[0].get("text", "")
 
             raise Exception("No content in response")
+
+    async def _call_groq_backup(self, prompt: str) -> str:
+        """Backup: Use Groq API when Gemini fails"""
+        if not self.groq_key:
+            print("[SCRIPT] No Groq API key, skipping backup")
+            return None
+
+        try:
+            print("[SCRIPT] Trying Groq backup API...")
+            client = Groq(api_key=self.groq_key)
+
+            response = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.8,
+                max_tokens=4096
+            )
+
+            script = response.choices[0].message.content
+            print(f"[SCRIPT] Groq SUCCESS! Generated {len(script)} chars")
+            return script
+
+        except Exception as e:
+            print(f"[SCRIPT] Groq backup failed: {e}")
+            return None
 
     def _create_prompt(self, text: str, subject: str, chapter: str) -> str:
         """Create the podcast script generation prompt"""
