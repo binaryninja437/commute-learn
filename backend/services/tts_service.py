@@ -1,32 +1,27 @@
 """
-TTS Service - Multi-voice using Edge TTS
-Didi = Female Hindi voice
-Bhaiya = Male Hindi voice
+TTS Service - Multi-voice using different gTTS settings
+Didi = Female voice (Hindi)
+Bhaiya = Male voice (English-India with different accent)
 """
 
 import os
 import re
 import asyncio
 import tempfile
-import edge_tts
 from pydub import AudioSegment
+from pydub.effects import speedup
+from gtts import gTTS
 
 from dotenv import load_dotenv
 load_dotenv()
 
 
 class TTSService:
-    # Real Hindi voices - Male and Female
-    VOICES = {
-        "DIDI": "hi-IN-SwaraNeural",      # Female Hindi
-        "BHAIYA": "hi-IN-MadhurNeural",    # Male Hindi
-    }
-
     def __init__(self):
         self.temp_dir = tempfile.mkdtemp()
-        print("[TTS] Service initialized with Edge TTS (Multi-voice)")
-        print(f"[TTS] Didi voice: {self.VOICES['DIDI']}")
-        print(f"[TTS] Bhaiya voice: {self.VOICES['BHAIYA']}")
+        print("[TTS] Service initialized with Multi-voice gTTS")
+        print("[TTS] Didi: Hindi female (hi)")
+        print("[TTS] Bhaiya: English-India male (en, tld=co.in, slower)")
 
     async def generate_audio(self, script: str, output_path: str) -> int:
         """Convert script to MP3 with different voices for Didi and Bhaiya"""
@@ -48,35 +43,43 @@ class TTSService:
                     continue
 
                 segment_path = os.path.join(self.temp_dir, f"seg_{i}.mp3")
-                voice = self.VOICES.get(speaker, self.VOICES["DIDI"])
-
                 clean_text = self._clean_text(text)
 
-                print(f"[TTS] Segment {i}: {speaker} ({voice}) - {len(clean_text)} chars")
+                print(f"[TTS] Segment {i}: {speaker} - {len(clean_text)} chars")
 
                 try:
-                    # Generate audio with Edge TTS
-                    communicate = edge_tts.Communicate(clean_text, voice)
-                    await communicate.save(segment_path)
+                    if speaker == "DIDI":
+                        # Female voice: Hindi, normal speed
+                        tts = gTTS(text=clean_text, lang='hi', slow=False)
+                        tts.save(segment_path)
+                    else:  # BHAIYA
+                        # Male voice: English-India, slower and deeper
+                        tts = gTTS(text=clean_text, lang='en', tld='co.in', slow=False)
+                        tts.save(segment_path)
+
+                        # Make it sound different (lower pitch via speed manipulation)
+                        audio = AudioSegment.from_mp3(segment_path)
+                        # Slow down slightly and lower pitch
+                        audio = audio._spawn(audio.raw_data, overrides={
+                            "frame_rate": int(audio.frame_rate * 0.90)
+                        }).set_frame_rate(audio.frame_rate)
+                        audio.export(segment_path, format="mp3")
+
                     audio_files.append(segment_path)
 
                 except Exception as e:
-                    print(f"[TTS] Edge TTS failed for segment {i}: {e}")
-                    # Fallback to gTTS
+                    print(f"[TTS] Segment {i} failed: {e}")
+                    # Try fallback
                     try:
-                        from gtts import gTTS
                         tts = gTTS(text=clean_text, lang='hi')
                         tts.save(segment_path)
                         audio_files.append(segment_path)
-                        print(f"[TTS] Used gTTS fallback for segment {i}")
                     except Exception as e2:
-                        print(f"[TTS] gTTS fallback also failed: {e2}")
+                        print(f"[TTS] Fallback also failed: {e2}")
                         continue
 
             if not audio_files:
                 print("[TTS] No audio generated!")
-                # Create error message audio
-                from gtts import gTTS
                 tts = gTTS("Audio generation failed. Please try again.", lang='en')
                 tts.save(output_path)
                 return 5
@@ -102,7 +105,6 @@ class TTSService:
 
             # Emergency fallback
             try:
-                from gtts import gTTS
                 clean_script = re.sub(r'(DIDI:|BHAIYA:)', '', script)
                 tts = gTTS(text=clean_script[:3000], lang='hi')
                 tts.save(output_path)
@@ -169,7 +171,7 @@ class TTSService:
     def _combine_audio(self, audio_files: list, output_path: str) -> int:
         """Combine audio segments with small pauses"""
         combined = AudioSegment.empty()
-        pause = AudioSegment.silent(duration=400)  # 400ms pause between speakers
+        pause = AudioSegment.silent(duration=500)  # 500ms pause between speakers
 
         for i, audio_file in enumerate(audio_files):
             try:
