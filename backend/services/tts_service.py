@@ -1,86 +1,91 @@
 """
-TTS Service using gTTS (Google Text-to-Speech)
-Free, reliable, works immediately
+TTS Service - Multi-voice using Edge TTS
+Didi = Female Hindi voice
+Bhaiya = Male Hindi voice
 """
 
 import os
+import re
+import asyncio
+import tempfile
+import edge_tts
+from pydub import AudioSegment
+
 from dotenv import load_dotenv
 load_dotenv()
 
-import re
-import asyncio
-from gtts import gTTS
-from pydub import AudioSegment
-import tempfile
-
 
 class TTSService:
+    # Real Hindi voices - Male and Female
+    VOICES = {
+        "DIDI": "hi-IN-SwaraNeural",      # Female Hindi
+        "BHAIYA": "hi-IN-MadhurNeural",    # Male Hindi
+    }
+
     def __init__(self):
         self.temp_dir = tempfile.mkdtemp()
-        print("[TTS] Service initialized with gTTS")
+        print("[TTS] Service initialized with Edge TTS (Multi-voice)")
+        print(f"[TTS] Didi voice: {self.VOICES['DIDI']}")
+        print(f"[TTS] Bhaiya voice: {self.VOICES['BHAIYA']}")
 
     async def generate_audio(self, script: str, output_path: str) -> int:
-        """Convert script to MP3 audio"""
-        print(f"[TTS] Generating audio for {len(script)} characters")
-        print(f"[TTS] Output: {output_path}")
+        """Convert script to MP3 with different voices for Didi and Bhaiya"""
+        print(f"[TTS] Generating multi-voice audio...")
+        print(f"[TTS] Script length: {len(script)} characters")
 
         try:
             # Parse script into segments
             segments = self._parse_script(script)
-            print(f"[TTS] Parsed {len(segments)} segments")
+            print(f"[TTS] Found {len(segments)} dialogue segments")
 
             if not segments:
-                print("[TTS] No segments found, using full script")
                 segments = [("DIDI", script)]
 
             audio_files = []
 
             for i, (speaker, text) in enumerate(segments):
-                if not text.strip():
+                if not text.strip() or len(text.strip()) < 2:
                     continue
 
                 segment_path = os.path.join(self.temp_dir, f"seg_{i}.mp3")
+                voice = self.VOICES.get(speaker, self.VOICES["DIDI"])
 
-                # Use different languages for variety
-                # hi = Hindi, en-IN = Indian English
-                lang = "hi" if speaker == "DIDI" else "en"
-                tld = "co.in"  # Indian accent for English
+                clean_text = self._clean_text(text)
+
+                print(f"[TTS] Segment {i}: {speaker} ({voice}) - {len(clean_text)} chars")
 
                 try:
-                    # Clean text for TTS
-                    clean_text = self._clean_text(text)
-
-                    if len(clean_text) < 2:
-                        continue
-
-                    print(f"[TTS] Segment {i}: {speaker} - {len(clean_text)} chars")
-
-                    # Generate audio
-                    tts = gTTS(text=clean_text, lang=lang, tld=tld)
-                    tts.save(segment_path)
+                    # Generate audio with Edge TTS
+                    communicate = edge_tts.Communicate(clean_text, voice)
+                    await communicate.save(segment_path)
                     audio_files.append(segment_path)
 
                 except Exception as e:
-                    print(f"[TTS] Segment {i} failed: {e}")
-                    # Try with English as fallback
+                    print(f"[TTS] Edge TTS failed for segment {i}: {e}")
+                    # Fallback to gTTS
                     try:
-                        tts = gTTS(text=clean_text, lang="en")
+                        from gtts import gTTS
+                        tts = gTTS(text=clean_text, lang='hi')
                         tts.save(segment_path)
                         audio_files.append(segment_path)
-                    except:
+                        print(f"[TTS] Used gTTS fallback for segment {i}")
+                    except Exception as e2:
+                        print(f"[TTS] gTTS fallback also failed: {e2}")
                         continue
 
             if not audio_files:
-                print("[TTS] No audio generated, creating placeholder")
-                tts = gTTS(text="Audio generation failed. Please try again.", lang="en")
+                print("[TTS] No audio generated!")
+                # Create error message audio
+                from gtts import gTTS
+                tts = gTTS("Audio generation failed. Please try again.", lang='en')
                 tts.save(output_path)
                 return 5
 
             # Combine all segments
-            print(f"[TTS] Combining {len(audio_files)} audio files")
+            print(f"[TTS] Combining {len(audio_files)} audio segments...")
             duration = self._combine_audio(audio_files, output_path)
 
-            # Cleanup temp files
+            # Cleanup
             for f in audio_files:
                 try:
                     os.remove(f)
@@ -95,11 +100,13 @@ class TTSService:
             import traceback
             traceback.print_exc()
 
-            # Create a fallback audio
+            # Emergency fallback
             try:
-                tts = gTTS(text="Sorry, audio generation encountered an error.", lang="en")
+                from gtts import gTTS
+                clean_script = re.sub(r'(DIDI:|BHAIYA:)', '', script)
+                tts = gTTS(text=clean_script[:3000], lang='hi')
                 tts.save(output_path)
-                return 5
+                return 60
             except:
                 raise
 
@@ -107,55 +114,84 @@ class TTSService:
         """Parse script into (speaker, text) tuples"""
         segments = []
         current_speaker = "DIDI"
+        current_text = []
 
-        lines = script.strip().split("\n")
+        lines = script.strip().split('\n')
 
         for line in lines:
             line = line.strip()
             if not line:
                 continue
 
-            if line.upper().startswith("DIDI:"):
+            # Check for speaker change
+            if line.upper().startswith('DIDI:'):
+                # Save previous segment
+                if current_text:
+                    segments.append((current_speaker, ' '.join(current_text)))
+                    current_text = []
                 current_speaker = "DIDI"
                 text = line[5:].strip()
-            elif line.upper().startswith("BHAIYA:"):
+                if text:
+                    current_text.append(text)
+
+            elif line.upper().startswith('BHAIYA:'):
+                # Save previous segment
+                if current_text:
+                    segments.append((current_speaker, ' '.join(current_text)))
+                    current_text = []
                 current_speaker = "BHAIYA"
                 text = line[7:].strip()
+                if text:
+                    current_text.append(text)
             else:
-                text = line
+                # Continue current speaker
+                current_text.append(line)
 
-            if text:
-                segments.append((current_speaker, text))
+        # Don't forget last segment
+        if current_text:
+            segments.append((current_speaker, ' '.join(current_text)))
 
         return segments
 
     def _clean_text(self, text: str) -> str:
         """Clean text for TTS"""
-        # Remove special characters
-        text = re.sub(r'[*_#`]', '', text)
-        text = re.sub(r'\[.*?\]', '', text)  # Remove [brackets]
-        text = text.replace("...", ", ")
-        text = text.replace("  ", " ")
+        # Remove markdown/special chars
+        text = re.sub(r'[*_#`\[\]]', '', text)
+        text = text.replace('...', ', ')
+        text = text.replace('  ', ' ')
+
+        # Remove excessive punctuation
+        text = re.sub(r'[!]{2,}', '!', text)
+        text = re.sub(r'[?]{2,}', '?', text)
+
         return text.strip()
 
     def _combine_audio(self, audio_files: list, output_path: str) -> int:
-        """Combine audio files into one"""
+        """Combine audio segments with small pauses"""
         combined = AudioSegment.empty()
-        pause = AudioSegment.silent(duration=300)  # 300ms pause
+        pause = AudioSegment.silent(duration=400)  # 400ms pause between speakers
 
-        for audio_file in audio_files:
+        for i, audio_file in enumerate(audio_files):
             try:
                 segment = AudioSegment.from_mp3(audio_file)
-                combined += segment + pause
+                combined += segment
+
+                # Add pause between segments (not after last)
+                if i < len(audio_files) - 1:
+                    combined += pause
+
             except Exception as e:
                 print(f"[TTS] Error loading {audio_file}: {e}")
                 continue
 
         if len(combined) == 0:
-            # Create minimal audio
             combined = AudioSegment.silent(duration=1000)
+
+        # Add fade in/out for polish
+        if len(combined) > 1000:
+            combined = combined.fade_in(300).fade_out(300)
 
         # Export
         combined.export(output_path, format="mp3", bitrate="128k")
 
-        return int(len(combined) / 1000)  # Duration in seconds
+        return int(len(combined) / 1000)
