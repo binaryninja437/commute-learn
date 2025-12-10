@@ -837,9 +837,9 @@ function PlayerBar({
         </div>
 
         {/* Volume, Speed & Download */}
-        <div className="flex items-center gap-3 w-1/4 justify-end">
-          {/* Speed Control */}
-          <div className="hidden md:flex items-center gap-1 bg-white/5 rounded-lg p-1">
+        <div className="flex items-center gap-2 w-1/4 justify-end">
+          {/* Speed Control - Now visible on mobile */}
+          <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
             {[1, 1.5, 2].map((speed) => (
               <button
                 key={speed}
