@@ -103,7 +103,7 @@ class OCRService:
 
             print(f"[OCR] PDF extracted: {len(text)} characters")
 
-            if len(text.strip()) > 50:
+            if len(text.strip()) > 20:
                 return text
 
             # If no text extracted, PDF might be scanned - return message
