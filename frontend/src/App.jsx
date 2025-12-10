@@ -26,7 +26,8 @@ export default function App() {
   const [isMuted, setIsMuted] = useState(false);
   const [subject, setSubject] = useState('Physics');
   const [chapter, setChapter] = useState('');
-  
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+
   const audioRef = useRef(null);
   const pollIntervalRef = useRef(null);
 
@@ -161,6 +162,13 @@ export default function App() {
     }
   };
 
+  const changeSpeed = (speed) => {
+    setPlaybackSpeed(speed);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = speed;
+    }
+  };
+
   const formatTime = (time) => {
     const mins = Math.floor(time / 60);
     const secs = Math.floor(time % 60);
@@ -253,6 +261,8 @@ export default function App() {
           formatTime={formatTime}
           handleTimeUpdate={handleTimeUpdate}
           handleLoadedMetadata={handleLoadedMetadata}
+          playbackSpeed={playbackSpeed}
+          changeSpeed={changeSpeed}
         />
       )}
     </div>
@@ -758,7 +768,9 @@ function PlayerBar({
   skip,
   formatTime,
   handleTimeUpdate,
-  handleLoadedMetadata
+  handleLoadedMetadata,
+  playbackSpeed,
+  changeSpeed
 }) {
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-spotify-dark/95 backdrop-blur-xl border-t border-white/5 px-4 py-3 z-50">
@@ -824,8 +836,25 @@ function PlayerBar({
           </div>
         </div>
 
-        {/* Volume & Download */}
+        {/* Volume, Speed & Download */}
         <div className="flex items-center gap-3 w-1/4 justify-end">
+          {/* Speed Control */}
+          <div className="hidden md:flex items-center gap-1 bg-white/5 rounded-lg p-1">
+            {[1, 1.5, 2].map((speed) => (
+              <button
+                key={speed}
+                onClick={() => changeSpeed(speed)}
+                className={`px-2 py-1 text-xs font-semibold rounded-md transition-all
+                  ${playbackSpeed === speed
+                    ? 'bg-spotify-green text-black'
+                    : 'text-text-secondary hover:text-white'
+                  }`}
+              >
+                {speed}x
+              </button>
+            ))}
+          </div>
+
           <button onClick={toggleMute} className="text-text-secondary hover:text-white">
             {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
           </button>
