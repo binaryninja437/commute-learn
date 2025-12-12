@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
-# exit on error
-set -o errexit
+# Render build script for SaarLM backend
 
-# Install system dependencies
+set -o errexit  # Exit on error
+
+echo "Installing Python dependencies..."
+pip install --upgrade pip
+pip install -r requirements.txt
+
+echo "Installing ffmpeg for audio processing..."
 apt-get update
 apt-get install -y ffmpeg
 
-# Install Python dependencies
-pip install --upgrade pip
-pip install -r requirements.txt
+echo "Build complete!"
