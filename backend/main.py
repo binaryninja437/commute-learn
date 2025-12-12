@@ -183,11 +183,24 @@ CHARACTERS:
 - DIDI: Female tutor, warm and encouraging
 - BHAIYA: Male tutor, gives exam tips
 
-RULES:
+STRICT RULES - MUST FOLLOW:
 1. Use Hinglish (Hindi + English mix)
-2. Base content on the notes below
+2. Base content ONLY on the notes provided below
 3. Make it conversational and engaging
 4. 5-8 minutes long
+
+⚠️ CRITICAL - DO NOT INCLUDE:
+- NO phone numbers (real or fake)
+- NO WhatsApp numbers
+- NO email addresses
+- NO website URLs
+- NO social media handles
+- NO contact information of any kind
+- NO promotional content
+- NO references to external services
+- NO made-up statistics or data not in the notes
+
+ONLY discuss the educational content from the notes. End with motivation like "Keep studying!" or "All the best!" but NO contact details.
 
 SUBJECT: {subject}
 CHAPTER: {chapter}
@@ -199,11 +212,11 @@ FORMAT:
 DIDI: [dialogue]
 BHAIYA: [dialogue]
 
-Generate the complete podcast script:"""
+Generate the complete podcast script (educational content only, no contact info):"""
 
         script_payload = {
             "contents": [{"parts": [{"text": script_prompt}]}],
-            "generationConfig": {"temperature": 0.8, "maxOutputTokens": 8192}
+            "generationConfig": {"temperature": 0.7, "maxOutputTokens": 8192}
         }
 
         print(f"[STEP 2] Calling Gemini API for script...")
@@ -219,7 +232,32 @@ Generate the complete podcast script:"""
 
         result = response.json()
         script = result["candidates"][0]["content"]["parts"][0]["text"]
-        print(f"[STEP 2] SUCCESS! Generated {len(script)} chars")
+        print(f"[STEP 2] Generated {len(script)} chars")
+
+        # ============ SAFETY FILTER ============
+        import re
+
+        # Remove phone numbers (Indian format)
+        script = re.sub(r'\b\d{10}\b', '', script)
+        script = re.sub(r'\b\d{5}[\s-]?\d{5}\b', '', script)
+        script = re.sub(r'\+91[\s-]?\d{10}', '', script)
+
+        # Remove WhatsApp references with numbers
+        script = re.sub(r'[Ww]hats[Aa]pp[^\n]*\d+[^\n]*', '', script)
+        script = re.sub(r'[Cc]ontact[^\n]*\d+[^\n]*', '', script)
+        script = re.sub(r'[Cc]all[^\n]*\d+[^\n]*', '', script)
+
+        # Remove email addresses
+        script = re.sub(r'\b[\w.-]+@[\w.-]+\.\w+\b', '', script)
+
+        # Remove URLs
+        script = re.sub(r'https?://\S+', '', script)
+        script = re.sub(r'www\.\S+', '', script)
+
+        # Clean up empty lines
+        script = re.sub(r'\n\s*\n\s*\n', '\n\n', script)
+
+        print(f"[STEP 2] After safety filter: {len(script)} chars")
         print(f"[STEP 2] Preview: {script[:200]}...")
 
         # ============ STEP 3: TTS ============
