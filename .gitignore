@@ -2,8 +2,11 @@ __pycache__/
 *.pyc
 *.pyo
 venv/
+venv311/
 env/
 .env
+.env.*
+*.env.backup
 *.mp3
 uploads/
 outputs/
