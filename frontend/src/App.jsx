@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 // API Configuration
-const API_BASE = 'http://localhost:8001/api';
+const API_BASE = 'https://saarlm-api.onrender.com/api';
 
 // ============================================
 // MAIN APP COMPONENT

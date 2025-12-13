@@ -1,10 +1,11 @@
 {
-  "appId": "com.commutelearn.app",
-  "appName": "Commute & Learn",
+  "appId": "com.saarlm.app",
+  "appName": "SaarLM",
   "webDir": "dist",
   "server": {
     "androidScheme": "https",
-    "cleartext": true
+    "cleartext": true,
+    "hostname": "saarlm-api.onrender.com"
   },
   "android": {
     "allowMixedContent": true
